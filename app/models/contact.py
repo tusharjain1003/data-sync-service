@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, UniqueConstraint
+from sqlalchemy import DateTime, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, utcnow_column
@@ -15,7 +15,9 @@ class Contact(Base):
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     company: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    source_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = utcnow_column(server_default=True)
     updated_at: Mapped[datetime] = utcnow_column(server_default=True)
 

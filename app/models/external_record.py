@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import String, UniqueConstraint
+from sqlalchemy import DateTime, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,7 +17,9 @@ class ExternalRecord(Base):
     record_type: Mapped[str] = mapped_column(String(255), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    source_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     ingested_at: Mapped[datetime] = utcnow_column(server_default=True)
 
     __table_args__ = (

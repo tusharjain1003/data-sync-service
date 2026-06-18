@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, Text, UniqueConstraint
+from sqlalchemy import DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,10 +14,12 @@ class Event(Base):
     source_name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_record_id: Mapped[str] = mapped_column(String(255), nullable=False)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
-    starts_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    ends_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attendee_emails: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
-    source_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = utcnow_column(server_default=True)
     updated_at: Mapped[datetime] = utcnow_column(server_default=True)
 

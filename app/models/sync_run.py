@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import String
+from sqlalchemy import DateTime, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,8 +17,8 @@ class SyncRun(Base):
     __tablename__ = "sync_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    started_at: Mapped[datetime] = mapped_column(nullable=False)
-    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     trigger: Mapped[str] = mapped_column(String(50), nullable=False)
     summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

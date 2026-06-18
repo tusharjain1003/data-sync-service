@@ -18,6 +18,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+_ALTER_TZ_COLUMNS: list[str] = [
+    "ALTER TABLE contacts ALTER COLUMN source_updated_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING source_updated_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE events ALTER COLUMN starts_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING starts_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE events ALTER COLUMN ends_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING ends_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE events ALTER COLUMN source_updated_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING source_updated_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE transactions ALTER COLUMN occurred_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING occurred_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE transactions ALTER COLUMN source_updated_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING source_updated_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE external_records ALTER COLUMN source_updated_at"
+    " TYPE TIMESTAMP WITH TIME ZONE USING source_updated_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE source_connections ALTER COLUMN cursor_updated_at"
+    " TYPE TIMESTAMP WITH TIME ZONE USING cursor_updated_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE source_connections ALTER COLUMN last_full_sync_at"
+    " TYPE TIMESTAMP WITH TIME ZONE USING last_full_sync_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE source_connections ALTER COLUMN last_incremental_sync_at"
+    " TYPE TIMESTAMP WITH TIME ZONE USING last_incremental_sync_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE sync_runs ALTER COLUMN started_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING started_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE sync_runs ALTER COLUMN completed_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING completed_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE sync_run_sources ALTER COLUMN started_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING started_at AT TIME ZONE 'UTC'",
+    "ALTER TABLE sync_run_sources ALTER COLUMN completed_at TYPE TIMESTAMP WITH TIME ZONE"
+    " USING completed_at AT TIME ZONE 'UTC'",
+]
+
+
 async def _run_migrations() -> None:
     """Run database migrations on startup."""
     try:
@@ -36,6 +68,11 @@ async def _run_migrations() -> None:
         )
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            for stmt in _ALTER_TZ_COLUMNS:
+                try:
+                    await conn.execute(sa_text(stmt))
+                except Exception:
+                    logger.warning("Column already timestamptz or not applicable: %s", stmt[:60])
             result = await conn.execute(
                 sa_text(
                     "SELECT 1 FROM collected_status_allowlist "
