@@ -1,6 +1,9 @@
 """Demo-only endpoints for simulating failure scenarios and seeding data."""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,16 +27,28 @@ class SeedResponse(BaseModel):
 
 
 @router.post("/seed", response_model=SeedResponse)
-async def demo_seed(session: AsyncSession = Depends(get_session)) -> SeedResponse:
+async def demo_seed(session: AsyncSession = Depends(get_session)) -> Any:
     """Seed deterministic demo data into the database.
 
     Safe to call multiple times — uses idempotent upserts.
     """
-    summary = await seed_demo_data(session)
-    return SeedResponse(
-        message="Demo data seeded successfully.",
-        **summary,
-    )
+    try:
+        summary = await seed_demo_data(session)
+        return SeedResponse(
+            message="Demo data seeded successfully.",
+            **summary,
+        )
+    except Exception as e:
+        import traceback
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": type(e).__name__,
+                "detail": str(e),
+                "traceback": traceback.format_exc(),
+            },
+        )
 
 
 @router.post("/simulate-cursor-expired/{source_name}", response_model=MessageResponse)
