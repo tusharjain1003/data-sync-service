@@ -26,7 +26,7 @@ class SeedResponse(BaseModel):
     transactions: int
 
 
-@router.post("/seed", response_model=SeedResponse)
+@router.post("/seed")
 async def demo_seed(session: AsyncSession = Depends(get_session)) -> Any:
     """Seed deterministic demo data into the database.
 
