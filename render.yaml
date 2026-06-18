@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: data-sync-service
+    runtime: python
+    buildCommand: pip install .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: USE_MOCK_CONNECTORS
+        value: "false"
