@@ -242,6 +242,7 @@ All endpoints, request schemas, and response models are documented automatically
 | Revenue uses allow-list, not exclusion-list | `app/services/metrics.py` — joins `collected_status_allowlist WHERE counts_as_collected=true` | `test_metrics.py::TestRevenueSummary` — only collected statuses count |
 | Summary and breakdown use same revenue path | `app/services/metrics.py:_build_base_query()` shared by both endpoints | `test_metrics.py::TestSharedQueryBuilderGuard` — monkeypatches the shared method |
 | Unknown statuses do not count | `app/normalizers/status_mapper.py` maps unknown → `unknown`; metrics exclude non-allow-listed statuses | `test_metrics.py::TestNewStatusGuard` — adding a new status does not change revenue |
+| Allowlist seeded by migration | `migrations/versions/003_seed_allowlist_idempotent.py` inserts via `ON CONFLICT DO NOTHING` | `test_schema.py::test_migration_seeds_collected_allowlist` — Alembic upgrade to head produces the row |
 | Demo routes disabled by default | `app/core/config.py:enable_demo_routes=false`; `app/main.py` conditionally registers router | `test_sync_api.py::TestDemoRoutesDisabledInProduction`, `TestMainAppDefaultNoDemo` |
 | Render deployment configuration | `render.yaml` with build/start commands, all credential env vars listed | Deploy to Render, verify `GET /health` returns 200 |
 
