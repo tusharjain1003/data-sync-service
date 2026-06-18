@@ -219,6 +219,34 @@ Requires no database or external credentials.
 
 ---
 
+## Interactive API Docs
+
+FastAPI automatically generates interactive OpenAPI documentation:
+
+- **Swagger UI**: `http://localhost:8000/docs`
+- **OpenAPI schema**: `http://localhost:8000/openapi.json`
+
+All endpoints, request schemas, and response models are documented automatically.
+
+---
+
+## Requirement Checklist
+
+| Requirement | Where Implemented | How to Verify |
+|---|---|---|
+| Full and incremental fetch | `app/connectors/base.py` (ABC); mock connectors in `app/connectors/mock_*.py` | `test_connectors.py` — full fetch returns all records, incremental returns new records |
+| Cursor expiry fallback to full backfill | `app/services/sync_orchestrator.py:135-142` catches `CursorExpiredError` → `fetch_full()` | `test_sync_orchestrator.py::TestCursorExpiryFallback` |
+| Idempotent upserts | `app/services/repository.py` uses `ON CONFLICT DO UPDATE` on `(source_name, source_record_id)` | `test_repository.py` — insert twice keeps 1 row; `test_sync_orchestrator.py::TestDuplicateSyncIsIdempotent` |
+| Malformed record rejection | `app/services/sync_orchestrator.py:159-163` catches `SourcePayloadError` per record | `test_sync_orchestrator.py::TestMalformedRecordRejection` (6 tests) |
+| One source failure does not wedge others | `app/services/sync_orchestrator.py:129` savepoint isolation + per-source exception handling | `test_sync_orchestrator.py::TestPartialFailure`, `TestPersistenceFailure`, `TestUnexpectedSourceErrors` |
+| Revenue uses allow-list, not exclusion-list | `app/services/metrics.py` — joins `collected_status_allowlist WHERE counts_as_collected=true` | `test_metrics.py::TestRevenueSummary` — only collected statuses count |
+| Summary and breakdown use same revenue path | `app/services/metrics.py:_build_base_query()` shared by both endpoints | `test_metrics.py::TestSharedQueryBuilderGuard` — monkeypatches the shared method |
+| Unknown statuses do not count | `app/normalizers/status_mapper.py` maps unknown → `unknown`; metrics exclude non-allow-listed statuses | `test_metrics.py::TestNewStatusGuard` — adding a new status does not change revenue |
+| Demo routes disabled by default | `app/core/config.py:enable_demo_routes=false`; `app/main.py` conditionally registers router | `test_sync_api.py::TestDemoRoutesDisabledInProduction`, `TestMainAppDefaultNoDemo` |
+| Render deployment configuration | `render.yaml` with build/start commands, all credential env vars listed | Deploy to Render, verify `GET /health` returns 200 |
+
+---
+
 ## Render Deployment
 
 1. Push the repository to GitHub.
