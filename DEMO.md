@@ -84,7 +84,7 @@ Second run uses **incremental** fetch (1 new record per source):
 curl -X POST http://localhost:8000/sync
 ```
 
-Third run — same incremental data, upserts are no-ops (0 records upserted):
+Third run — same incremental data, upserts are idempotent (no new rows added):
 
 ```bash
 curl -X POST http://localhost:8000/sync
@@ -95,14 +95,16 @@ Expected:
 {
   "status": "success",
   "sources": [
-    {"source_name":"mock_crm","sync_mode":"incremental","records_upserted":0},
-    {"source_name":"mock_calendar","sync_mode":"incremental","records_upserted":0},
-    {"source_name":"mock_payments","sync_mode":"incremental","records_upserted":0}
+    {"source_name":"mock_crm","sync_mode":"incremental","records_upserted":1},
+    {"source_name":"mock_calendar","sync_mode":"incremental","records_upserted":1},
+    {"source_name":"mock_payments","sync_mode":"incremental","records_upserted":1}
   ]
 }
 ```
 
 No duplicate rows — upserts match on `(source_name, source_record_id)`.
+The row counts (contacts=4, events=3, transactions=4) remain unchanged from the second sync.
+`records_upserted` counts upsert calls processed; existing rows are updated in place, not duplicated.
 
 ---
 
@@ -265,7 +267,7 @@ curl -s -X POST "$BASE/sync" | python3 -m json.tool
 echo -e "\n=== Sync 2 (incremental) ==="
 curl -s -X POST "$BASE/sync" | python3 -m json.tool
 
-echo -e "\n=== Sync 3 (no-op upserts) ==="
+echo -e "\n=== Sync 3 (idempotent upserts, no duplicate rows) ==="
 curl -s -X POST "$BASE/sync" | python3 -m json.tool
 
 echo -e "\n=== Cursor expiry -> full backfill ==="

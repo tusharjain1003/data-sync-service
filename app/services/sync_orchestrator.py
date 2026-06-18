@@ -118,63 +118,70 @@ async def _run_one_source(
     records_seen = 0
     records_upserted_count = 0
     records_rejected_count = 0
+    sync_mode: str = "unknown"
+    fallback_from_expired = False
 
     try:
-        source_conn = await _get_or_create_source_connection(session, connector)
-        cursor = source_conn.cursor
+        # Each source runs in a savepoint so a persistence-level error
+        # (DB constraint, connection loss, etc.) rolls back only this
+        # source's work and leaves the outer transaction healthy for
+        # subsequent sources.
+        async with session.begin_nested():
+            source_conn = await _get_or_create_source_connection(
+                session, connector
+            )
+            cursor = source_conn.cursor
 
-        sync_mode: str
-        fallback_from_expired = False
-
-        if cursor is not None:
-            try:
-                fetch_result = await connector.fetch_incremental(cursor)
-                sync_mode = "incremental"
-            except CursorExpiredError:
-                fallback_from_expired = True
+            if cursor is not None:
+                try:
+                    fetch_result = await connector.fetch_incremental(cursor)
+                    sync_mode = "incremental"
+                except CursorExpiredError:
+                    fallback_from_expired = True
+                    fetch_result = await connector.fetch_full()
+                    sync_mode = "full_after_cursor_expired"
+            else:
                 fetch_result = await connector.fetch_full()
-                sync_mode = "full_after_cursor_expired"
-        else:
-            fetch_result = await connector.fetch_full()
-            sync_mode = "full"
+                sync_mode = "full"
 
-        normalizer = _NORMALIZERS.get(connector.source_type)
-        upsert_info = _UPSERT_MAP.get(connector.source_type)
-        if normalizer is None or upsert_info is None:
-            raise SourcePayloadError(
-                f"No normalizer/upsert for source_type={connector.source_type}"
-            )
-        record_type_label, upsert_fn = upsert_info
+            normalizer = _NORMALIZERS.get(connector.source_type)
+            upsert_info = _UPSERT_MAP.get(connector.source_type)
+            if normalizer is None or upsert_info is None:
+                raise SourcePayloadError(
+                    f"No normalizer/upsert for source_type={connector.source_type}"
+                )
+            record_type_label, upsert_fn = upsert_info
 
-        raw_records = fetch_result.records or []
-        records_seen = len(raw_records)
+            raw_records = fetch_result.records or []
+            records_seen = len(raw_records)
 
-        for raw in raw_records:
-            try:
-                normalized = normalizer(raw, connector.source_name)
-            except SourcePayloadError:
-                records_rejected_count += 1
-                continue
+            for raw in raw_records:
+                try:
+                    normalized = normalizer(raw, connector.source_name)
+                except SourcePayloadError:
+                    records_rejected_count += 1
+                    continue
 
-            await upsert_fn(session, **normalized)
-            records_upserted_count += 1
+                await upsert_fn(session, **normalized)
+                records_upserted_count += 1
 
-            await upsert_external_record(
-                session,
-                source_name=connector.source_name,
-                source_record_id=normalized["source_record_id"],
-                record_type=record_type_label,
-                payload=raw,
-                source_updated_at=normalized.get("source_updated_at"),
-            )
+                await upsert_external_record(
+                    session,
+                    source_name=connector.source_name,
+                    source_record_id=normalized["source_record_id"],
+                    record_type=record_type_label,
+                    payload=raw,
+                    source_updated_at=normalized.get("source_updated_at"),
+                )
 
-        source_conn.cursor = fetch_result.cursor
-        source_conn.cursor_updated_at = datetime.now(UTC)
-        if sync_mode == "full" or fallback_from_expired:
-            source_conn.last_full_sync_at = datetime.now(UTC)
-        else:
-            source_conn.last_incremental_sync_at = datetime.now(UTC)
+            source_conn.cursor = fetch_result.cursor
+            source_conn.cursor_updated_at = datetime.now(UTC)
+            if sync_mode == "full" or fallback_from_expired:
+                source_conn.last_full_sync_at = datetime.now(UTC)
+            else:
+                source_conn.last_incremental_sync_at = datetime.now(UTC)
 
+        # Savepoint committed — update source_result in the outer transaction
         source_result.status = "success"
         source_result.sync_mode = sync_mode
         source_result.records_seen = records_seen
@@ -184,7 +191,7 @@ async def _run_one_source(
 
     except ConnectorError as e:
         source_result.status = "failed"
-        source_result.sync_mode = sync_mode if "sync_mode" in locals() else "unknown"
+        source_result.sync_mode = sync_mode
         source_result.records_seen = records_seen
         source_result.records_rejected = records_rejected_count
         source_result.error_code = type(e).__name__
@@ -193,7 +200,7 @@ async def _run_one_source(
 
     except Exception:
         source_result.status = "failed"
-        source_result.sync_mode = sync_mode if "sync_mode" in locals() else "unknown"
+        source_result.sync_mode = sync_mode
         source_result.records_seen = records_seen
         source_result.records_rejected = records_rejected_count
         source_result.error_code = "UNEXPECTED_SOURCE_ERROR"

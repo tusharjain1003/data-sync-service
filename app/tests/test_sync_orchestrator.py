@@ -519,6 +519,67 @@ class TestUnexpectedSourceErrors:
         assert results_by_name["mock_payments"].records_rejected >= 1
 
 
+class TestPersistenceFailure:
+    """A DB persistence error in one source must not prevent other sources from
+    syncing successfully.  This is enforced via savepoint isolation."""
+
+    async def test_persistence_failure_in_one_source_does_not_block_others(
+        self, async_session: AsyncSession, connectors: list[SyncConnector]
+    ) -> None:
+        from unittest.mock import patch
+
+        async def _fail_upsert(*args: Any, **kwargs: Any) -> None:
+            raise Exception("DB write failed")
+
+        with patch.dict(
+            "app.services.sync_orchestrator._UPSERT_MAP",
+            {"crm": ("contact", _fail_upsert)},
+        ):
+            second_run = await run_sync(async_session, [
+                MockCrmConnector(),
+                MockPaymentsConnector(),
+            ])
+            await async_session.commit()
+
+        assert second_run.status == "partial_success"
+        assert second_run.summary is not None
+        assert second_run.summary["failed"] == 1
+        assert second_run.summary["success"] == 1
+
+        results = await _source_results(async_session, second_run.id)
+        results_by_name = {r.source_name: r for r in results}
+        assert results_by_name["mock_crm"].status == "failed"
+        assert results_by_name["mock_crm"].error_code == "UNEXPECTED_SOURCE_ERROR"
+        assert results_by_name["mock_payments"].status == "success"
+        assert results_by_name["mock_payments"].records_upserted > 0
+
+    async def test_all_sources_persistence_failure_produces_failed_status(
+        self, async_session: AsyncSession, connectors: list[SyncConnector]
+    ) -> None:
+        from unittest.mock import patch
+
+        async def _fail_upsert(*args: Any, **kwargs: Any) -> None:
+            raise Exception("DB write failed")
+
+        with patch.dict(
+            "app.services.sync_orchestrator._UPSERT_MAP",
+            {
+                "crm": ("contact", _fail_upsert),
+                "payments": ("transaction", _fail_upsert),
+            },
+        ):
+            run = await run_sync(async_session, [
+                MockCrmConnector(),
+                MockPaymentsConnector(),
+            ])
+            await async_session.commit()
+
+        assert run.status == "failed"
+        assert run.summary is not None
+        assert run.summary["failed"] == 2
+        assert run.summary["success"] == 0
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 

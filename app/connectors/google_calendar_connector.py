@@ -36,6 +36,11 @@ class GoogleCalendarConnector(SyncConnector):
                 "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and "
                 "GOOGLE_REFRESH_TOKEN must be configured"
             )
+        if not self._calendar_id:
+            raise SourceUnavailableError(
+                "Google Calendar source unavailable: "
+                "GOOGLE_CALENDAR_ID must be configured"
+            )
         creds = Credentials(  # type: ignore[no-untyped-call]
             token=None,
             refresh_token=self._refresh_token,

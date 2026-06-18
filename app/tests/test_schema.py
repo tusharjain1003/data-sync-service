@@ -236,3 +236,49 @@ def test_migration_smoke(tmp_path: Any) -> None:
             )
     finally:
         settings.database_url = original
+
+
+def test_migration_seeds_collected_allowlist(tmp_path: Any) -> None:
+    """Prove that running migrations to head seeds the collected allow-list row.
+
+    Production revenue correctness depends on this row existing after
+    migrations are applied.  This test isolates that invariant from the
+    larger migration_smoke test.
+    """
+    import alembic.command
+    import alembic.config
+    from sqlalchemy import create_engine, inspect, text
+    from sqlalchemy.orm import Session
+
+    from app.core.config import settings
+
+    db_path = tmp_path / "seed_allowlist_test.db"
+    db_url = f"sqlite+aiosqlite:///{db_path}"
+
+    original = settings.database_url
+    settings.database_url = db_url
+    try:
+        cfg = alembic.config.Config("alembic.ini")
+        alembic.command.upgrade(cfg, "head")
+
+        sync_url = f"sqlite:///{db_path}"
+        engine = create_engine(sync_url)
+        inspector = inspect(engine)
+        table_names = set(inspector.get_table_names())
+        assert "collected_status_allowlist" in table_names
+
+        with Session(engine) as session:
+            rows = session.execute(
+                text(
+                    "SELECT canonical_status, counts_as_collected "
+                    "FROM collected_status_allowlist"
+                )
+            ).all()
+        assert len(rows) >= 1, "No rows in collected_status_allowlist after migration"
+        statuses = {r[0]: r[1] for r in rows}
+        assert statuses.get("collected") in (True, 1), (
+            f"Expected canonical_status='collected' with counts_as_collected=true, "
+            f"got: {statuses}"
+        )
+    finally:
+        settings.database_url = original

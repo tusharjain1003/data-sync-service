@@ -59,6 +59,8 @@ def _validate_production_config() -> None:
 
 
 def get_connector(source_name: str) -> SyncConnector:
+    if not settings.use_mock_connectors:
+        _validate_production_config()
     active = _get_active_sources()
     cls = active.get(source_name)
     if cls is None:

@@ -283,3 +283,75 @@ class TestGoogleCalendarIdValidation:
         ):
             sources = list_active_sources()
             assert "mock_calendar" in sources
+
+    def test_real_mode_get_connector_google_calendar_missing_calendar_id_fails(
+        self,
+    ) -> None:
+        with patch(
+            "app.connectors.registry.settings.use_mock_connectors", False
+        ), patch(
+            "app.connectors.registry.settings.hubspot_access_token", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_client_id", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_client_secret", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_refresh_token", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_calendar_id", ""
+        ), patch(
+            "app.connectors.registry.settings.stripe_secret_key", "test"
+        ):
+            with pytest.raises(
+                SourceUnavailableError, match="GOOGLE_CALENDAR_ID"
+            ):
+                get_connector("google_calendar")
+
+    def test_real_mode_get_connector_google_calendar_all_credentials_present(
+        self,
+    ) -> None:
+        with patch(
+            "app.connectors.registry.settings.use_mock_connectors", False
+        ), patch(
+            "app.connectors.registry.settings.hubspot_access_token", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_client_id", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_client_secret", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_refresh_token", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_calendar_id", "test"
+        ), patch(
+            "app.connectors.registry.settings.stripe_secret_key", "test"
+        ):
+            connector = get_connector("google_calendar")
+            assert connector.source_name == "google_calendar"
+
+    def test_real_mode_get_connector_fails_on_missing_hubspot_token(self) -> None:
+        with patch(
+            "app.connectors.registry.settings.use_mock_connectors", False
+        ), patch(
+            "app.connectors.registry.settings.hubspot_access_token", ""
+        ), patch(
+            "app.connectors.registry.settings.google_client_id", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_client_secret", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_refresh_token", "test"
+        ), patch(
+            "app.connectors.registry.settings.google_calendar_id", "test"
+        ), patch(
+            "app.connectors.registry.settings.stripe_secret_key", "test"
+        ):
+            with pytest.raises(
+                SourceUnavailableError, match="HUBSPOT_ACCESS_TOKEN"
+            ):
+                get_connector("hubspot_crm")
+
+    def test_mock_mode_get_connector_does_not_require_any_credentials(self) -> None:
+        with patch(
+            "app.connectors.registry.settings.use_mock_connectors", True
+        ):
+            connector = get_connector("mock_crm")
+            assert connector.source_name == "mock_crm"
