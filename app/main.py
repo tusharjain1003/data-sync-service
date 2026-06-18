@@ -19,21 +19,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 async def _run_migrations() -> None:
-    """Run Alembic migrations on startup so no manual alembic upgrade head is needed."""
+    """Run database migrations on startup."""
     try:
-        import asyncio
+        from sqlalchemy import pool
+        from sqlalchemy import text as sa_text
+        from sqlalchemy.ext.asyncio import async_engine_from_config
 
-        import alembic.command
-        import alembic.config
+        from app.models import Base
 
-        cfg = alembic.config.Config("alembic.ini")
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None, lambda: alembic.command.upgrade(cfg, "head")
+        cfg = {
+            "sqlalchemy.url": settings.database_url,
+            "sqlalchemy.echo": "false",
+        }
+        engine = async_engine_from_config(
+            cfg, prefix="sqlalchemy.", poolclass=pool.NullPool
         )
-        logger.info("Database migrations applied on startup")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            result = await conn.execute(
+                sa_text(
+                    "SELECT 1 FROM collected_status_allowlist "
+                    "WHERE canonical_status = 'collected'"
+                )
+            )
+            if result.scalar_one_or_none() is None:
+                await conn.execute(
+                    sa_text(
+                        "INSERT INTO collected_status_allowlist "
+                        "(canonical_status, counts_as_collected) "
+                        "VALUES ('collected', true)"
+                    )
+                )
+        await engine.dispose()
+        logger.info("Database tables created/verified on startup")
     except Exception as e:
-        logger.warning("Could not run startup migrations: %s", e)
+        logger.warning("Database init failed: %s", e)
 
 
 app = FastAPI(title="Data Sync Service", lifespan=lifespan)
